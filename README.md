@@ -1,1 +1,1 @@
-# Prankify
+# Project
