@@ -3,8 +3,8 @@ from rest_framework import status
 from rest_framework.decorators import api_view
 from rest_framework.response import Response
 from rest_framework.pagination import PageNumberPagination
-from .models import Post, User
-from .serializers import PostSerializer
+from .models import Post, User, Like
+from .serializers import PostSerializer, LikeSerializer
 
 @api_view(['GET', 'POST'])
 def post_list(request):
@@ -66,3 +66,60 @@ def post_detail(request, pk):
     elif request.method == 'DELETE':
         post.delete()
         return Response(status=status.HTTP_204_NO_CONTENT)
+
+@api_view(['POST', 'DELETE'])
+def post_like(request, pk):
+
+    post = get_object_or_404(Post, pk=pk)
+    
+    user = User.objects.first()
+    if not user:
+        return Response(
+            {"error": "No users exist in the database. Create a user first."},
+            status=status.HTTP_400_BAD_REQUEST
+        )
+    
+    if request.method == 'POST':
+        if Like.objects.filter(user=user, post=post).exists():
+            return Response(
+                {"error": "You have already liked this post"},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        Like.objects.create(user=user, post=post)
+        
+        post.likes_count += 1
+        post.save()
+        
+        return Response({"success": "Post liked successfully"}, status=status.HTTP_201_CREATED)
+    
+    elif request.method == 'DELETE':
+        like = Like.objects.filter(user=user, post=post).first()
+        
+        if not like:
+            return Response(
+                {"error": "You have not liked this post"},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        like.delete()
+        
+        post.likes_count = max(0, post.likes_count - 1) 
+        post.save()
+        
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
+@api_view(['GET'])
+def post_likes_list(request, pk):
+
+    post = get_object_or_404(Post, pk=pk)
+    
+    likes = Like.objects.filter(post=post)
+    
+    paginator = PageNumberPagination()
+    paginator.page_size = 10
+    result_page = paginator.paginate_queryset(likes, request)
+    
+    serializer = LikeSerializer(result_page, many=True)
+    
+    return paginator.get_paginated_response(serializer.data)
