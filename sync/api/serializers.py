@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import User, Post, Comment, Like
+from .models import User, Post, Comment, Like, Follow
 
 class UserSerializer(serializers.ModelSerializer):
     class Meta:
@@ -34,4 +34,13 @@ class LikeSerializer(serializers.ModelSerializer):
     class Meta:
         model = Like
         fields = ['id', 'user', 'post', 'created_at']
-        read_only_fields = ['created_at', 'user', 'post'] 
+        read_only_fields = ['created_at', 'user', 'post']
+
+class FollowSerializer(serializers.ModelSerializer):
+    follower = UserSerializer(read_only=True)
+    followed = UserSerializer(read_only=True)
+    
+    class Meta:
+        model = Follow
+        fields = ['id', 'follower', 'followed', 'created_at']
+        read_only_fields = ['created_at', 'follower', 'followed'] 
