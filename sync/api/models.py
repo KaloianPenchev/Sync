@@ -1,11 +1,16 @@
 from django.db import models
+from django.contrib.auth.models import AbstractUser
 
-class User(models.Model):
-    username = models.CharField(max_length=100, unique=True)
+class User(AbstractUser):
     email = models.EmailField(unique=True)
-    password = models.CharField(max_length=100)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
+    
+    USERNAME_FIELD = 'username'
+    REQUIRED_FIELDS = ['email']
+    
+    def __str__(self):
+        return self.username
 
 class Post(models.Model):
     user = models.ForeignKey(User, on_delete=models.CASCADE)

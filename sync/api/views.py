@@ -1,13 +1,42 @@
 from django.shortcuts import render, get_object_or_404
 from django.db.models import Q
-from rest_framework import status
-from rest_framework.decorators import api_view
+from rest_framework import status, generics, permissions
+from rest_framework.decorators import api_view, permission_classes
 from rest_framework.response import Response
 from rest_framework.pagination import PageNumberPagination
+from rest_framework.permissions import IsAuthenticated, AllowAny
+from rest_framework_simplejwt.views import TokenObtainPairView
+from rest_framework_simplejwt.tokens import RefreshToken
 from .models import Post, User, Like, Comment, Follow
-from .serializers import PostSerializer, LikeSerializer, CommentSerializer, FollowSerializer, UserSerializer
+from .serializers import (
+    PostSerializer, LikeSerializer, CommentSerializer, 
+    FollowSerializer, UserSerializer, RegisterSerializer,
+    CustomTokenObtainPairSerializer
+)
+
+
+class CustomTokenObtainPairView(TokenObtainPairView):
+
+    serializer_class = CustomTokenObtainPairSerializer
+
+class RegisterView(generics.CreateAPIView):
+    queryset = User.objects.all()
+    permission_classes = (AllowAny,)
+    serializer_class = RegisterSerializer
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def logout_view(request):
+    try:
+        refresh_token = request.data["refresh"]
+        token = RefreshToken(refresh_token)
+        token.blacklist()
+        return Response(status=status.HTTP_205_RESET_CONTENT)
+    except Exception as e:
+        return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
 
 @api_view(['GET', 'POST'])
+@permission_classes([IsAuthenticated])
 def post_list(request):
     
     if request.method == 'GET':
@@ -24,18 +53,11 @@ def post_list(request):
         return paginator.get_paginated_response(serializer.data)
     
     elif request.method == 'POST':
-        serializer = PostSerializer(data=request.data)
+        serializer = PostSerializer(data=request.data, context={'request': request})
         
         if serializer.is_valid():
             try:
-                user = User.objects.first()
-                if not user:
-                    return Response(
-                        {"error": "No users exist in the database. Create a user first."},
-                        status=status.HTTP_400_BAD_REQUEST
-                    )
-                
-                serializer.save(user=user)
+                serializer.save()
                 return Response(serializer.data, status=status.HTTP_201_CREATED)
             
             except Exception as e:
@@ -47,6 +69,7 @@ def post_list(request):
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 @api_view(['GET', 'PUT', 'DELETE'])
+@permission_classes([IsAuthenticated])
 def post_detail(request, pk):
     
     post = get_object_or_404(Post, pk=pk)
@@ -56,6 +79,12 @@ def post_detail(request, pk):
         return Response(serializer.data)
     
     elif request.method == 'PUT':
+        if post.user != request.user:
+            return Response(
+                {"error": "You don't have permission to edit this post."},
+                status=status.HTTP_403_FORBIDDEN
+            )
+            
         serializer = PostSerializer(post, data=request.data, partial=True)
         
         if serializer.is_valid():
@@ -65,20 +94,22 @@ def post_detail(request, pk):
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
     
     elif request.method == 'DELETE':
+        if post.user != request.user:
+            return Response(
+                {"error": "You don't have permission to delete this post."},
+                status=status.HTTP_403_FORBIDDEN
+            )
+            
         post.delete()
         return Response(status=status.HTTP_204_NO_CONTENT)
 
 @api_view(['POST', 'DELETE'])
+@permission_classes([IsAuthenticated])
 def post_like(request, pk):
 
     post = get_object_or_404(Post, pk=pk)
     
-    user = User.objects.first()
-    if not user:
-        return Response(
-            {"error": "No users exist in the database. Create a user first."},
-            status=status.HTTP_400_BAD_REQUEST
-        )
+    user = request.user
     
     if request.method == 'POST':
         if Like.objects.filter(user=user, post=post).exists():
@@ -111,6 +142,7 @@ def post_like(request, pk):
         return Response(status=status.HTTP_204_NO_CONTENT)
 
 @api_view(['GET'])
+@permission_classes([IsAuthenticated])
 def post_likes_list(request, pk):
 
     post = get_object_or_404(Post, pk=pk)
@@ -126,6 +158,7 @@ def post_likes_list(request, pk):
     return paginator.get_paginated_response(serializer.data)
 
 @api_view(['GET', 'POST'])
+@permission_classes([IsAuthenticated])
 def post_comments(request, pk):
     post = get_object_or_404(Post, pk=pk)
     
@@ -144,12 +177,7 @@ def post_comments(request, pk):
         serializer = CommentSerializer(data=request.data)
         
         if serializer.is_valid():
-            user = User.objects.first()
-            if not user:
-                return Response(
-                    {"error": "No users exist in the database. Create a user first."},
-                    status=status.HTTP_400_BAD_REQUEST
-                )
+            user = request.user
             
             serializer.save(user=user, post=post)
             
@@ -158,8 +186,8 @@ def post_comments(request, pk):
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 @api_view(['GET', 'PUT', 'DELETE'])
+@permission_classes([IsAuthenticated])
 def comment_detail(request, pk):
-
     comment = get_object_or_404(Comment, pk=pk)
     
     if request.method == 'GET':
@@ -167,6 +195,12 @@ def comment_detail(request, pk):
         return Response(serializer.data)
     
     elif request.method == 'PUT':
+        if comment.user != request.user:
+            return Response(
+                {"error": "You don't have permission to edit this comment."},
+                status=status.HTTP_403_FORBIDDEN
+            )
+            
         serializer = CommentSerializer(comment, data=request.data, partial=True)
         
         if serializer.is_valid():
@@ -176,10 +210,17 @@ def comment_detail(request, pk):
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
     
     elif request.method == 'DELETE':
+        if comment.user != request.user and comment.post.user != request.user:
+            return Response(
+                {"error": "You don't have permission to delete this comment."},
+                status=status.HTTP_403_FORBIDDEN
+            )
+            
         comment.delete()
         return Response(status=status.HTTP_204_NO_CONTENT)
 
 @api_view(['GET'])
+@permission_classes([IsAuthenticated])
 def user_detail(request, username):
     try:
         user = User.objects.get(username=username)
@@ -198,9 +239,13 @@ def user_detail(request, username):
     data['followers_count'] = followers_count
     data['following_count'] = following_count
     
+    is_following = Follow.objects.filter(follower=request.user, followed=user).exists()
+    data['is_following'] = is_following
+    
     return Response(data)
 
 @api_view(['GET'])
+@permission_classes([IsAuthenticated])
 def user_posts(request, username):
     try:
         user = User.objects.get(username=username)
@@ -221,8 +266,8 @@ def user_posts(request, username):
     return paginator.get_paginated_response(serializer.data)
 
 @api_view(['POST', 'DELETE'])
+@permission_classes([IsAuthenticated])
 def user_follow(request, username):
-
     try:
         followed_user = User.objects.get(username=username)
     except User.DoesNotExist:
@@ -231,12 +276,7 @@ def user_follow(request, username):
             status=status.HTTP_404_NOT_FOUND
         )
     
-    follower_user = User.objects.first()
-    if not follower_user:
-        return Response(
-            {"error": "No users exist in the database. Create a user first."},
-            status=status.HTTP_400_BAD_REQUEST
-        )
+    follower_user = request.user
     
     if follower_user.id == followed_user.id:
         return Response(
@@ -270,8 +310,8 @@ def user_follow(request, username):
         return Response(status=status.HTTP_204_NO_CONTENT)
 
 @api_view(['GET'])
+@permission_classes([IsAuthenticated])
 def user_followers(request, username):
-
     try:
         user = User.objects.get(username=username)
     except User.DoesNotExist:
@@ -291,6 +331,7 @@ def user_followers(request, username):
     return paginator.get_paginated_response(serializer.data)
 
 @api_view(['GET'])
+@permission_classes([IsAuthenticated])
 def user_following(request, username):
     try:
         user = User.objects.get(username=username)
@@ -311,14 +352,9 @@ def user_following(request, username):
     return paginator.get_paginated_response(serializer.data)
 
 @api_view(['GET'])
+@permission_classes([IsAuthenticated])
 def explore_posts(request):
-
-    user = User.objects.first()
-    if not user:
-        return Response(
-            {"error": "No users exist in the database."},
-            status=status.HTTP_400_BAD_REQUEST
-        )
+    user = request.user
     
     following_ids = Follow.objects.filter(follower=user).values_list('followed_id', flat=True)
     
@@ -332,5 +368,28 @@ def explore_posts(request):
     result_page = paginator.paginate_queryset(posts, request)
     
     serializer = PostSerializer(result_page, many=True)
+    
+    return paginator.get_paginated_response(serializer.data)
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def feed(request):
+    user = request.user
+    
+    following_ids = Follow.objects.filter(follower=user).values_list('followed_id', flat=True)
+    
+    following_ids = list(following_ids)
+    following_ids.append(user.id)
+    
+    posts = Post.objects.filter(user_id__in=following_ids).order_by('-created_at')
+    
+
+    paginator = PageNumberPagination()
+    paginator.page_size = 10
+    result_page = paginator.paginate_queryset(posts, request)
+    
+
+    serializer = PostSerializer(result_page, many=True)
+    
     
     return paginator.get_paginated_response(serializer.data)
