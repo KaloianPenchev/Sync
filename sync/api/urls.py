@@ -28,4 +28,8 @@ urlpatterns = [
     path("users/<str:username>/follow/", views.user_follow, name="user-follow"),
     path("users/<str:username>/followers/", views.user_followers, name="user-followers"),
     path("users/<str:username>/following/", views.user_following, name="user-following"),
+
+
+    # TODO : Add urls for groups
+
 ]

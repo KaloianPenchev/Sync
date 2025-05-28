@@ -393,3 +393,5 @@ def feed(request):
     
     
     return paginator.get_paginated_response(serializer.data)
+
+# TODO : Add view for groups
