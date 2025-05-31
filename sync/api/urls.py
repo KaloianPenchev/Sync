@@ -32,6 +32,8 @@ urlpatterns = [
     
     path("groups/", views.group_list, name="group-list"),  
     path("groups/<int:pk>/", views.group_detail, name="group-detail"),  
+    path("groups/<int:pk>/membership/", views.group_membership, name="group-membership"), 
+    path("groups/<int:pk>/members/", views.group_members_list, name="group-members-list"), 
     
 
 ]
