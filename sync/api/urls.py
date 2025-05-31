@@ -34,6 +34,6 @@ urlpatterns = [
     path("groups/<int:pk>/", views.group_detail, name="group-detail"),  
     path("groups/<int:pk>/membership/", views.group_membership, name="group-membership"), 
     path("groups/<int:pk>/members/", views.group_members_list, name="group-members-list"), 
-    
+    path("groups/<int:pk>/posts/", views.group_posts, name="group-posts"), 
 
 ]
