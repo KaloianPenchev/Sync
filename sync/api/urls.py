@@ -29,7 +29,9 @@ urlpatterns = [
     path("users/<str:username>/followers/", views.user_followers, name="user-followers"),
     path("users/<str:username>/following/", views.user_following, name="user-following"),
 
-
-    # TODO : Add urls for groups
+    
+    path("groups/", views.group_list, name="group-list"),  
+    path("groups/<int:pk>/", views.group_detail, name="group-detail"),  
+    
 
 ]
