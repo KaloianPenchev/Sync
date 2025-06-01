@@ -486,3 +486,37 @@ def group_members_list(request, pk):
     serializer = GroupMembershipSerializer(result_page, many=True, context={'request': request})
     return paginator.get_paginated_response(serializer.data)
 
+@api_view(['GET', 'POST'])
+@permission_classes([IsAuthenticated])
+def group_posts(request, pk):
+    group = get_object_or_404(Group, pk=pk)
+    user = request.user
+
+    if request.method == 'GET':
+        posts = Post.objects.filter(group=group).order_by('-created_at')
+        paginator = PageNumberPagination()
+        paginator.page_size = 10
+        result_page = paginator.paginate_queryset(posts, request)
+        serializer = PostSerializer(result_page, many=True, context={'request': request})
+        return paginator.get_paginated_response(serializer.data)
+    
+    elif request.method == 'POST':
+        if not GroupMembership.objects.filter(user=user, group=group).exists():
+            return Response(
+                {"error": "You must be a member of the group to post."},
+                status=status.HTTP_403_FORBIDDEN
+            )
+        
+        serializer = PostSerializer(data=request.data, context={'request': request})
+        if serializer.is_valid():
+            try:
+                serializer.save(user=user, group=group)
+                return Response(serializer.data, status=status.HTTP_201_CREATED)
+            except Exception as e:
+                return Response(
+                    {"error": str(e)},
+                    status=status.HTTP_500_INTERNAL_SERVER_ERROR
+                )
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+
