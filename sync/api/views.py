@@ -443,3 +443,46 @@ def group_detail(request, pk):
         group.delete()
         return Response(status=status.HTTP_204_NO_CONTENT)
 
+@api_view(['POST', 'DELETE'])
+@permission_classes([IsAuthenticated])
+def group_membership(request, pk):
+    group = get_object_or_404(Group, pk=pk)
+    user = request.user
+
+    if request.method == 'POST': # Join group
+        if GroupMembership.objects.filter(user=user, group=group).exists():
+            return Response(
+                {"error": "You are already a member of this group."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        membership = GroupMembership.objects.create(user=user, group=group)
+        serializer = GroupMembershipSerializer(membership)
+        return Response(serializer.data, status=status.HTTP_201_CREATED)
+
+    elif request.method == 'DELETE': # Leave group
+        if group.owner == user:
+            return Response(
+                {"error": "Group owner cannot leave the group directly. Transfer ownership or delete the group."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        membership = GroupMembership.objects.filter(user=user, group=group).first()
+        if not membership:
+            return Response(
+                {"error": "You are not a member of this group."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        membership.delete()
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def group_members_list(request, pk):
+    group = get_object_or_404(Group, pk=pk)
+    memberships = GroupMembership.objects.filter(group=group).order_by('date_joined')
+    
+    paginator = PageNumberPagination()
+    paginator.page_size = 20 
+    result_page = paginator.paginate_queryset(memberships, request)
+    serializer = GroupMembershipSerializer(result_page, many=True, context={'request': request})
+    return paginator.get_paginated_response(serializer.data)
+
