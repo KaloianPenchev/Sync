@@ -7,11 +7,11 @@ from rest_framework.pagination import PageNumberPagination
 from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework_simplejwt.views import TokenObtainPairView
 from rest_framework_simplejwt.tokens import RefreshToken
-from .models import Post, User, Like, Comment, Follow
+from .models import Post, User, Like, Comment, Follow, Group, GroupMembership
 from .serializers import (
     PostSerializer, LikeSerializer, CommentSerializer, 
     FollowSerializer, UserSerializer, RegisterSerializer,
-    CustomTokenObtainPairSerializer
+    CustomTokenObtainPairSerializer, GroupSerializer, GroupMembershipSerializer
 )
 
 
@@ -394,4 +394,52 @@ def feed(request):
     
     return paginator.get_paginated_response(serializer.data)
 
-# TODO : Add view for groups
+@api_view(['GET', 'POST'])
+@permission_classes([IsAuthenticated])
+def group_list(request):
+    if request.method == 'GET':
+        groups = Group.objects.all().order_by('-created_at')
+        paginator = PageNumberPagination()
+        paginator.page_size = 10
+        result_page = paginator.paginate_queryset(groups, request)
+        serializer = GroupSerializer(result_page, many=True, context={'request': request})
+        return paginator.get_paginated_response(serializer.data)
+    
+    elif request.method == 'POST':
+        serializer = GroupSerializer(data=request.data, context={'request': request})
+        if serializer.is_valid():
+            group = serializer.save(owner=request.user)
+            GroupMembership.objects.create(user=request.user, group=group, role='admin')
+            return Response(serializer.data, status=status.HTTP_201_CREATED)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+@api_view(['GET', 'PUT', 'DELETE'])
+@permission_classes([IsAuthenticated])
+def group_detail(request, pk):
+    group = get_object_or_404(Group, pk=pk)
+    
+    if request.method == 'GET':
+        serializer = GroupSerializer(group, context={'request': request})
+        return Response(serializer.data)
+    
+    elif request.method == 'PUT':
+        if group.owner != request.user:
+            return Response(
+                {"error": "You don't have permission to edit this group."},
+                status=status.HTTP_403_FORBIDDEN
+            )
+        serializer = GroupSerializer(group, data=request.data, partial=True, context={'request': request})
+        if serializer.is_valid():
+            serializer.save()
+            return Response(serializer.data)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+    
+    elif request.method == 'DELETE':
+        if group.owner != request.user:
+            return Response(
+                {"error": "You don't have permission to delete this group."},
+                status=status.HTTP_403_FORBIDDEN
+            )
+        group.delete()
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
