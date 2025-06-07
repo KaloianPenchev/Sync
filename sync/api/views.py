@@ -232,8 +232,8 @@ def user_detail(request, username):
     
     serializer = UserSerializer(user)
     
-    followers_count = Follow.objects.filter(followed=user).count()
-    following_count = Follow.objects.filter(follower=user).count()
+    followers_count = user.followers.count()
+    following_count = user.following.count()
     
     data = serializer.data
     data['followers_count'] = followers_count
@@ -449,7 +449,7 @@ def group_membership(request, pk):
     group = get_object_or_404(Group, pk=pk)
     user = request.user
 
-    if request.method == 'POST': # Join group
+    if request.method == 'POST':
         if GroupMembership.objects.filter(user=user, group=group).exists():
             return Response(
                 {"error": "You are already a member of this group."},
@@ -459,7 +459,7 @@ def group_membership(request, pk):
         serializer = GroupMembershipSerializer(membership)
         return Response(serializer.data, status=status.HTTP_201_CREATED)
 
-    elif request.method == 'DELETE': # Leave group
+    elif request.method == 'DELETE': 
         if group.owner == user:
             return Response(
                 {"error": "Group owner cannot leave the group directly. Transfer ownership or delete the group."},
