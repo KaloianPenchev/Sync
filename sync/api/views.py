@@ -351,15 +351,15 @@ def user_following(request, username):
     
     return paginator.get_paginated_response(serializer.data)
 
+def _get_following_ids(user):
+    following_ids = list(Follow.objects.filter(follower=user).values_list('followed_id', flat=True))
+    following_ids.append(user.id)
+    return following_ids
+
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
 def explore_posts(request):
-    user = request.user
-    
-    following_ids = Follow.objects.filter(follower=user).values_list('followed_id', flat=True)
-    
-    following_ids = list(following_ids)
-    following_ids.append(user.id)
+    following_ids = _get_following_ids(request.user)
     
     posts = Post.objects.exclude(user_id__in=following_ids).order_by('-created_at')
     
@@ -374,12 +374,7 @@ def explore_posts(request):
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
 def feed(request):
-    user = request.user
-    
-    following_ids = Follow.objects.filter(follower=user).values_list('followed_id', flat=True)
-    
-    following_ids = list(following_ids)
-    following_ids.append(user.id)
+    following_ids = _get_following_ids(request.user)
     
     posts = Post.objects.filter(user_id__in=following_ids).order_by('-created_at')
     
