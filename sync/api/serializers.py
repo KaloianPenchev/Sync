@@ -1,7 +1,7 @@
 from rest_framework import serializers
 from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 from django.contrib.auth.password_validation import validate_password
-from .models import User, Post, Comment, Like, Follow
+from .models import User, Post, Comment, Like, Follow, Group, GroupMembership
 
 class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
     @classmethod
@@ -41,12 +41,12 @@ class UserSerializer(serializers.ModelSerializer):
 
 class PostSerializer(serializers.ModelSerializer):
     user = UserSerializer(read_only=True)
-    
+
     class Meta:
         model = Post
-        fields = ['id', 'user', 'title', 'content', 'created_at', 'updated_at', 'likes_count']
+        fields = ['id', 'user', 'title', 'content', 'created_at', 'updated_at', 'likes_count', 'group']
         read_only_fields = ['created_at', 'updated_at', 'likes_count', 'user']
-    
+
     def create(self, validated_data):
         user = self.context['request'].user
         post = Post.objects.create(user=user, **validated_data)
@@ -54,7 +54,7 @@ class PostSerializer(serializers.ModelSerializer):
 
 class CommentSerializer(serializers.ModelSerializer):
     user = UserSerializer(read_only=True)
-    
+
     class Meta:
         model = Comment
         fields = ['id', 'user', 'post', 'content', 'created_at']
@@ -62,7 +62,7 @@ class CommentSerializer(serializers.ModelSerializer):
 
 class LikeSerializer(serializers.ModelSerializer):
     user = UserSerializer(read_only=True)
-    
+
     class Meta:
         model = Like
         fields = ['id', 'user', 'post', 'created_at']
@@ -71,8 +71,35 @@ class LikeSerializer(serializers.ModelSerializer):
 class FollowSerializer(serializers.ModelSerializer):
     follower = UserSerializer(read_only=True)
     followed = UserSerializer(read_only=True)
-    
+
     class Meta:
         model = Follow
         fields = ['id', 'follower', 'followed', 'created_at']
-        read_only_fields = ['created_at', 'follower', 'followed'] 
+        read_only_fields = ['created_at', 'follower', 'followed']
+
+class GroupSerializer(serializers.ModelSerializer):
+    creator = UserSerializer(read_only=True)
+    members_count = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Group
+        fields = ['id', 'name', 'description', 'creator', 'created_at', 'members_count']
+        read_only_fields = ['creator', 'created_at', 'members_count']
+
+    def get_members_count(self, obj):
+        return obj.members.count()
+
+    def create(self, validated_data):
+        user = self.context['request'].user
+        group = Group.objects.create(creator=user, **validated_data)
+        GroupMembership.objects.create(user=user, group=group)
+        return group
+
+class GroupMembershipSerializer(serializers.ModelSerializer):
+    user = UserSerializer(read_only=True)
+    group = serializers.PrimaryKeyRelatedField(read_only=True)
+
+    class Meta:
+        model = GroupMembership
+        fields = ['id', 'user', 'group', 'date_joined']
+        read_only_fields = ['date_joined']
