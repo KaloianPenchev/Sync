@@ -3,7 +3,7 @@ from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 from django.contrib.auth.password_validation import validate_password
 from .models import User, Post, Comment, Like, Follow, Group, GroupMembership
 
-class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
+class TokenSerializer(TokenObtainPairSerializer):
     @classmethod
     def get_token(cls, user):
         token = super().get_token(user)
